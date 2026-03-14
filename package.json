@@ -1,0 +1,11 @@
+{
+  "name": "color-focus",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "check": "node --check background.js && node --check content.js && node --check popup/popup.js && node --check lib/textDetector.js && node --check lib/colorEngine.js && node --check lib/themeDetector.js"
+  },
+  "dependencies": {
+    "compromise": "^14.15.0"
+  }
+}

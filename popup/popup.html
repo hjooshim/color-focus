@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Color Focus</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup-shell">
+      <section class="hero-card" aria-labelledby="popup-title">
+        <img class="hero-logo" src="../assets/logo.png" alt="Color Focus logo" />
+        <div class="hero-copy">
+          <p class="eyebrow">Reading Helper</p>
+          <h1 id="popup-title">Color Focus</h1>
+          <p class="hero-text">
+            Color-code article text by grammatical role without leaving the page.
+          </p>
+        </div>
+      </section>
+
+      <section class="control-card" aria-labelledby="session-title">
+        <div class="section-heading">
+          <p class="section-kicker">Session</p>
+          <h2 id="session-title">Current tab</h2>
+        </div>
+
+        <button id="toggle-button" class="primary-button" type="button" disabled>
+          Loading controls
+        </button>
+
+        <label class="field" for="theme-mode">
+          <span class="field-label">Theme mode</span>
+          <select id="theme-mode" disabled>
+            <option value="auto">Auto</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+
+        <p id="status-text" class="status-text" role="status">
+          Extension shell ready. Interaction wiring lands next.
+        </p>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

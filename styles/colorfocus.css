@@ -1,0 +1,25 @@
+:root[data-cr-theme="dark"] {
+  --cr-noun: #569cd6;
+  --cr-verb: #c586c0;
+  --cr-adjective: #4ec9b0;
+  --cr-adverb: #d4d4aa;
+  --cr-preposition: #808080;
+  --cr-determiner: #808080;
+  --cr-conjunction: #808080;
+  --cr-pronoun: #9cdcfe;
+  --cr-proper-noun: #4fc1ff;
+  --cr-value: #b5cea8;
+}
+
+:root[data-cr-theme="light"] {
+  --cr-noun: #0550ae;
+  --cr-verb: #8250df;
+  --cr-adjective: #1a7f5a;
+  --cr-adverb: #6f6b00;
+  --cr-preposition: #6e7781;
+  --cr-determiner: #6e7781;
+  --cr-conjunction: #6e7781;
+  --cr-pronoun: #0969da;
+  --cr-proper-noun: #0a3069;
+  --cr-value: #116329;
+}
