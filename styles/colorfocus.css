@@ -23,3 +23,47 @@
   --cr-proper-noun: #0a3069;
   --cr-value: #116329;
 }
+
+span[data-cr-original="true"].cr-noun {
+  color: var(--cr-noun);
+}
+
+span[data-cr-original="true"].cr-verb {
+  color: var(--cr-verb);
+}
+
+span[data-cr-original="true"].cr-adjective {
+  color: var(--cr-adjective);
+}
+
+span[data-cr-original="true"].cr-adverb {
+  color: var(--cr-adverb);
+}
+
+span[data-cr-original="true"].cr-preposition {
+  color: var(--cr-preposition);
+}
+
+span[data-cr-original="true"].cr-determiner {
+  color: var(--cr-determiner);
+}
+
+span[data-cr-original="true"].cr-conjunction {
+  color: var(--cr-conjunction);
+}
+
+span[data-cr-original="true"].cr-pronoun {
+  color: var(--cr-pronoun);
+}
+
+span[data-cr-original="true"].cr-proper-noun {
+  color: var(--cr-proper-noun);
+}
+
+span[data-cr-original="true"].cr-value {
+  color: var(--cr-value);
+}
+
+span[data-cr-original="true"].cr-other {
+  color: inherit;
+}
