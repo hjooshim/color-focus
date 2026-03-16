@@ -1,6 +1,11 @@
 const state = {
   enabled: false,
-  themeMode: "auto"
+  themeMode: "auto",
+  generation: 0,
+  observer: null,
+  observerTimer: null,
+  pendingRoots: new Set(),
+  processingQueue: Promise.resolve()
 };
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -53,41 +58,55 @@ async function handleMessage(message) {
   return buildStatus({ ok: false, reason: "unknown-action" });
 }
 
-function activatePage() {
+async function activatePage() {
   if (!isSupportedContext()) {
-    state.enabled = false;
+    resetRuntimeState();
     return buildStatus({ supported: false, reason: "unsupported-page" });
   }
 
   if (isExplicitlyNonEnglishDocument()) {
-    state.enabled = false;
+    resetRuntimeState();
     return buildStatus({ reason: "non-english" });
   }
 
   const detector = globalThis.ColorFocusTextDetector;
   const colorEngine = globalThis.ColorFocusColorEngine;
   if (!detector || !colorEngine) {
-    state.enabled = false;
+    resetRuntimeState();
     return buildStatus({ ok: false, reason: "missing-engine" });
   }
 
+  const generation = beginActivation();
   colorEngine.removeColoring(document);
   applyTheme(getAnchorElement());
 
   const blocks = detector.detectTextBlocks(document);
-  let coloredBlocks = 0;
+  const coloredBlocks = await processBlocks(blocks, generation);
 
-  blocks.forEach((block) => {
-    coloredBlocks += colorEngine.colorBlock(block);
-  });
+  if (generation !== state.generation) {
+    return buildStatus({ reason: "inactive" });
+  }
 
   state.enabled = coloredBlocks > 0;
+  if (state.enabled) {
+    startObserving(generation);
+  } else {
+    const themeDetector = globalThis.ColorFocusThemeDetector;
+    if (themeDetector) {
+      themeDetector.clearTheme();
+    }
+  }
+
   return buildStatus({
     reason: state.enabled ? "active" : "no-readable-text"
   });
 }
 
 function deactivatePage() {
+  state.generation += 1;
+  stopObserving();
+  state.pendingRoots.clear();
+
   const colorEngine = globalThis.ColorFocusColorEngine;
   const themeDetector = globalThis.ColorFocusThemeDetector;
 
@@ -100,6 +119,115 @@ function deactivatePage() {
   }
 
   state.enabled = false;
+}
+
+function beginActivation() {
+  state.generation += 1;
+  state.enabled = false;
+  stopObserving();
+  state.pendingRoots.clear();
+  return state.generation;
+}
+
+async function processBlocks(blocks, generation) {
+  const colorEngine = globalThis.ColorFocusColorEngine;
+  const safeBlocks = dedupeBlocks(blocks).filter((block) => document.contains(block));
+  const chunkSize = 5;
+  let coloredBlocks = 0;
+
+  for (let index = 0; index < safeBlocks.length; index += chunkSize) {
+    if (generation !== state.generation) {
+      return coloredBlocks;
+    }
+
+    const chunk = safeBlocks.slice(index, index + chunkSize);
+    chunk.forEach((block) => {
+      coloredBlocks += colorEngine.colorBlock(block);
+    });
+
+    if (index + chunkSize < safeBlocks.length) {
+      await yieldToMain();
+    }
+  }
+
+  return coloredBlocks;
+}
+
+function startObserving(generation) {
+  if (!document.body) {
+    return;
+  }
+
+  stopObserving();
+  state.observer = new MutationObserver((mutations) => {
+    if (!state.enabled || generation !== state.generation) {
+      return;
+    }
+
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        const root = getProcessableRoot(node);
+        if (root) {
+          state.pendingRoots.add(root);
+        }
+      });
+    });
+
+    if (!state.pendingRoots.size) {
+      return;
+    }
+
+    if (state.observerTimer) {
+      clearTimeout(state.observerTimer);
+    }
+
+    state.observerTimer = window.setTimeout(() => {
+      const roots = Array.from(state.pendingRoots);
+      state.pendingRoots.clear();
+
+      queueProcessing(async () => {
+        if (!state.enabled || generation !== state.generation) {
+          return;
+        }
+
+        const detector = globalThis.ColorFocusTextDetector;
+        const discoveredBlocks = [];
+
+        roots.forEach((root) => {
+          discoveredBlocks.push(...detector.detectTextBlocks(root));
+        });
+
+        await processBlocks(discoveredBlocks, generation);
+      });
+    }, 200);
+  });
+
+  state.observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+}
+
+function stopObserving() {
+  if (state.observerTimer) {
+    clearTimeout(state.observerTimer);
+    state.observerTimer = null;
+  }
+
+  if (state.observer) {
+    state.observer.disconnect();
+    state.observer = null;
+  }
+}
+
+function queueProcessing(task) {
+  state.processingQueue = state.processingQueue
+    .then(task)
+    .catch((error) => {
+      console.error("Color Focus queued processing error", error);
+    });
+
+  return state.processingQueue;
 }
 
 function applyTheme(anchorElement) {
@@ -151,4 +279,50 @@ function isSupportedContext() {
 
 function getAnchorElement() {
   return document.querySelector("article, main") || document.body || document.documentElement;
+}
+
+function getProcessableRoot(node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.parentElement;
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return null;
+  }
+
+  if (
+    node.hasAttribute("data-cr-processed") ||
+    node.hasAttribute("data-cr-original") ||
+    node.closest("[data-cr-original='true']")
+  ) {
+    return null;
+  }
+
+  return node;
+}
+
+function dedupeBlocks(blocks) {
+  const unique = [];
+  const seen = new Set();
+
+  blocks.forEach((block) => {
+    if (!block || seen.has(block)) {
+      return;
+    }
+
+    seen.add(block);
+    unique.push(block);
+  });
+
+  return unique;
+}
+
+function yieldToMain() {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+function resetRuntimeState() {
+  deactivatePage();
 }

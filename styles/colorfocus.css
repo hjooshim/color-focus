@@ -67,3 +67,9 @@ span[data-cr-original="true"].cr-value {
 span[data-cr-original="true"].cr-other {
   color: inherit;
 }
+
+@media print {
+  span[data-cr-original="true"] {
+    color: inherit !important;
+  }
+}
