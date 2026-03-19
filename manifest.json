@@ -3,7 +3,7 @@
   "name": "Color Focus",
   "version": "0.1.0",
   "description": "Color-code webpage text by part of speech to support focused reading.",
-  "permissions": ["activeTab", "storage"],
+  "permissions": ["activeTab", "storage", "scripting"],
   "action": {
     "default_title": "Color Focus",
     "default_popup": "popup/popup.html",

@@ -122,13 +122,18 @@ select {
 }
 
 .primary-button:disabled {
-  opacity: 0.55;
-  cursor: wait;
+  opacity: 0.42;
+  cursor: not-allowed;
   box-shadow: none;
+  filter: saturate(0.7);
 }
 
 .primary-button[data-active="true"] {
   background: linear-gradient(135deg, #b42318 0%, #8f1c12 100%);
+}
+
+.primary-button[data-supported="false"] {
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
 }
 
 select {
@@ -138,6 +143,11 @@ select {
   border-color: var(--line);
   color: var(--ink);
   font-size: 15px;
+}
+
+select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .status-text {

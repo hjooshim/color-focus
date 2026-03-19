@@ -28,7 +28,7 @@ async function handleMessage(message) {
   if (message.action === "setThemeMode") {
     const themeMode = normalizeThemeMode(message.themeMode);
     await setThemeMode(themeMode);
-    return relayToActiveTab({ action: "setThemeMode", themeMode }, themeMode, true);
+    return relayToActiveTab({ action: "setThemeMode", themeMode }, themeMode);
   }
 
   if (message.action === "activate" || message.action === "deactivate") {
@@ -39,7 +39,7 @@ async function handleMessage(message) {
   return { ok: false, reason: "unknown-action" };
 }
 
-async function relayToActiveTab(payload, themeMode, allowNoReceiver) {
+async function relayToActiveTab(payload, themeMode) {
   const tab = await getActiveTab();
   if (!tab || typeof tab.id !== "number") {
     return buildUnsupportedResponse(themeMode, "no-active-tab");
@@ -51,21 +51,31 @@ async function relayToActiveTab(payload, themeMode, allowNoReceiver) {
 
   try {
     const response = await sendMessageToTab(tab.id, payload);
-    if (!response) {
-      return buildUnsupportedResponse(themeMode, "no-response");
-    }
-
-    return {
-      themeMode,
-      ...response
-    };
+    return mergeTabResponse(response, themeMode);
   } catch (error) {
-    if (allowNoReceiver) {
-      return buildUnsupportedResponse(themeMode, "unsupported-page");
+    if (shouldAttemptInjection(error)) {
+      try {
+        await injectContentScripts(tab.id);
+        const retryResponse = await sendMessageToTab(tab.id, payload);
+        return mergeTabResponse(retryResponse, themeMode);
+      } catch (retryError) {
+        console.error("Color Focus injection retry failed", retryError);
+      }
     }
 
     return buildUnsupportedResponse(themeMode, "unsupported-page");
   }
+}
+
+function mergeTabResponse(response, themeMode) {
+  if (!response) {
+    return buildUnsupportedResponse(themeMode, "no-response");
+  }
+
+  return {
+    themeMode,
+    ...response
+  };
 }
 
 function buildUnsupportedResponse(themeMode, reason) {
@@ -96,6 +106,55 @@ function sendMessageToTab(tabId, payload) {
 
       resolve(response);
     });
+  });
+}
+
+async function injectContentScripts(tabId) {
+  await insertCss(tabId, ["styles/colorfocus.css"]);
+  await executeScript(tabId, [
+    "lib/compromise.min.js",
+    "lib/themeDetector.js",
+    "lib/textDetector.js",
+    "lib/colorEngine.js",
+    "content.js"
+  ]);
+}
+
+function insertCss(tabId, files) {
+  return new Promise((resolve, reject) => {
+    chrome.scripting.insertCSS(
+      {
+        target: { tabId },
+        files
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+
+        resolve();
+      }
+    );
+  });
+}
+
+function executeScript(tabId, files) {
+  return new Promise((resolve, reject) => {
+    chrome.scripting.executeScript(
+      {
+        target: { tabId },
+        files
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+
+        resolve();
+      }
+    );
   });
 }
 
@@ -132,4 +191,13 @@ function isSupportedUrl(url) {
   } catch (_error) {
     return false;
   }
+}
+
+function shouldAttemptInjection(error) {
+  const message = String(error && error.message ? error.message : error);
+  return (
+    message.includes("Receiving end does not exist") ||
+    message.includes("Could not establish connection") ||
+    message.includes("The message port closed before a response was received")
+  );
 }

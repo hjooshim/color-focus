@@ -49,8 +49,8 @@ async function sendMessage(payload) {
     const response = await Promise.race([sendRuntimeMessage(payload), createTimeoutPromise()]);
     return response || {
       ok: false,
-      enabled: false,
-      supported: false,
+      enabled: currentState.enabled,
+      supported: currentState.supported,
       reason: "background-error",
       themeMode: currentState.themeMode
     };
@@ -58,8 +58,8 @@ async function sendMessage(payload) {
     console.error("Color Focus popup error", error);
     return {
       ok: false,
-      enabled: false,
-      supported: false,
+      enabled: currentState.enabled,
+      supported: currentState.supported,
       reason: error && error.message === "popup-timeout" ? "popup-timeout" : "background-error",
       themeMode: currentState.themeMode
     };
@@ -96,12 +96,29 @@ function applyState(nextState) {
   themeSelect.value = currentState.themeMode || "auto";
   themeSelect.disabled = !currentState.supported;
   toggleButton.disabled = !currentState.supported;
-  toggleButton.textContent = currentState.enabled ? "Turn Off for This Tab" : "Turn On for This Tab";
+  toggleButton.textContent = getButtonCopy(currentState);
   toggleButton.dataset.active = currentState.enabled ? "true" : "false";
+  toggleButton.dataset.supported = currentState.supported ? "true" : "false";
   statusText.textContent = getStatusCopy(currentState);
 }
 
+function getButtonCopy(state) {
+  if (!state.supported) {
+    return "Unavailable on This Tab";
+  }
+
+  return state.enabled ? "Turn Off for This Tab" : "Turn On for This Tab";
+}
+
 function getStatusCopy(state) {
+  if (state.reason === "popup-timeout") {
+    return "The page took too long to answer. Try clicking again in a moment.";
+  }
+
+  if (state.reason === "background-error" || state.reason === "content-error") {
+    return "The extension hit an error while talking to this tab.";
+  }
+
   if (!state.supported) {
     return "This tab does not allow Color Focus. Try a regular http or https page.";
   }
@@ -116,14 +133,6 @@ function getStatusCopy(state) {
 
   if (state.reason === "activating") {
     return "Color Focus is turning on for this tab.";
-  }
-
-  if (state.reason === "popup-timeout") {
-    return "The page took too long to answer. Try reopening the popup after a moment.";
-  }
-
-  if (state.reason === "background-error" || state.reason === "content-error") {
-    return "The extension hit an error while talking to this tab.";
   }
 
   if (state.enabled) {
