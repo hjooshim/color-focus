@@ -1,5 +1,6 @@
 const state = {
   enabled: false,
+  reason: "inactive",
   themeMode: "auto",
   generation: 0,
   observer: null,
@@ -38,7 +39,7 @@ async function handleMessage(message) {
 
   if (message.action === "setThemeMode") {
     state.themeMode = normalizeThemeMode(message.themeMode);
-    if (state.enabled) {
+    if (state.enabled || state.reason === "activating") {
       applyTheme(getAnchorElement());
     }
 
@@ -77,29 +78,47 @@ async function activatePage() {
   }
 
   const generation = beginActivation();
-  colorEngine.removeColoring(document);
-  applyTheme(getAnchorElement());
+  queueProcessing(async () => {
+    try {
+      colorEngine.removeColoring(document);
+      applyTheme(getAnchorElement());
 
-  const blocks = detector.detectTextBlocks(document);
-  const coloredBlocks = await processBlocks(blocks, generation);
+      const blocks = detector.detectTextBlocks(document);
+      const coloredBlocks = await processBlocks(blocks, generation);
 
-  if (generation !== state.generation) {
-    return buildStatus({ reason: "inactive" });
-  }
+      if (generation !== state.generation) {
+        return;
+      }
 
-  state.enabled = coloredBlocks > 0;
-  if (state.enabled) {
-    startObserving(generation);
-  } else {
-    const themeDetector = globalThis.ColorFocusThemeDetector;
-    if (themeDetector) {
-      themeDetector.clearTheme();
+      state.enabled = coloredBlocks > 0;
+      state.reason = state.enabled ? "active" : "no-readable-text";
+
+      if (state.enabled) {
+        startObserving(generation);
+        return;
+      }
+
+      const themeDetector = globalThis.ColorFocusThemeDetector;
+      if (themeDetector) {
+        themeDetector.clearTheme();
+      }
+    } catch (error) {
+      if (generation !== state.generation) {
+        return;
+      }
+
+      console.error("Color Focus activation error", error);
+      state.enabled = false;
+      state.reason = "content-error";
+      stopObserving();
+      const themeDetector = globalThis.ColorFocusThemeDetector;
+      if (themeDetector) {
+        themeDetector.clearTheme();
+      }
     }
-  }
-
-  return buildStatus({
-    reason: state.enabled ? "active" : "no-readable-text"
   });
+
+  return buildStatus();
 }
 
 function deactivatePage() {
@@ -119,11 +138,13 @@ function deactivatePage() {
   }
 
   state.enabled = false;
+  state.reason = "inactive";
 }
 
 function beginActivation() {
   state.generation += 1;
-  state.enabled = false;
+  state.enabled = true;
+  state.reason = "activating";
   stopObserving();
   state.pendingRoots.clear();
   return state.generation;
@@ -245,7 +266,7 @@ function buildStatus(overrides) {
     ok: true,
     enabled: state.enabled,
     supported: isSupportedContext(),
-    reason: state.enabled ? "active" : "inactive",
+    reason: state.reason,
     themeMode: state.themeMode
   };
 

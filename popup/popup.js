@@ -1,6 +1,7 @@
 const toggleButton = document.getElementById("toggle-button");
 const themeSelect = document.getElementById("theme-mode");
 const statusText = document.getElementById("status-text");
+const RESPONSE_TIMEOUT_MS = 4000;
 
 let currentState = {
   enabled: false,
@@ -45,7 +46,7 @@ async function refreshStatus() {
 
 async function sendMessage(payload) {
   try {
-    const response = await sendRuntimeMessage(payload);
+    const response = await Promise.race([sendRuntimeMessage(payload), createTimeoutPromise()]);
     return response || {
       ok: false,
       enabled: false,
@@ -59,10 +60,18 @@ async function sendMessage(payload) {
       ok: false,
       enabled: false,
       supported: false,
-      reason: "background-error",
+      reason: error && error.message === "popup-timeout" ? "popup-timeout" : "background-error",
       themeMode: currentState.themeMode
     };
   }
+}
+
+function createTimeoutPromise() {
+  return new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error("popup-timeout"));
+    }, RESPONSE_TIMEOUT_MS);
+  });
 }
 
 function sendRuntimeMessage(payload) {
@@ -103,6 +112,14 @@ function getStatusCopy(state) {
 
   if (state.reason === "no-readable-text") {
     return "No readable long-form text was detected on this page.";
+  }
+
+  if (state.reason === "activating") {
+    return "Color Focus is turning on for this tab.";
+  }
+
+  if (state.reason === "popup-timeout") {
+    return "The page took too long to answer. Try reopening the popup after a moment.";
   }
 
   if (state.reason === "background-error" || state.reason === "content-error") {
